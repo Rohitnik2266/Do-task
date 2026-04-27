@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VQL Analyzer - Denodo to Snowflake Migration</title>
+<style>
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f6fa; color: #333; display: flex; height: 100vh; overflow: hidden; }
+
+/* ===== SIDEBAR ===== */
+.sidebar { width: 250px; min-width: 250px; background: #1a1f2e; color: #fff; display: flex; flex-direction: column; height: 100vh; }
+.sidebar-logo { padding: 24px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.sidebar-logo h2 { font-size: 18px; font-weight: 700; letter-spacing: 0.5px; }
+.sidebar-logo h2 span { color: #3dd6d0; }
+.sidebar-logo p { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 4px; letter-spacing: 1px; text-transform: uppercase; }
+.sidebar-nav { flex: 1; padding: 16px 0; }
+.sidebar-nav a { display: flex; align-items: center; gap: 12px; padding: 12px 20px; color: rgba(255,255,255,0.55); text-decoration: none; font-size: 14px; transition: all 0.2s; border-left: 3px solid transparent; }
+.sidebar-nav a:hover { color: #fff; background: rgba(255,255,255,0.05); }
+.sidebar-nav a.active { color: #fff; background: rgba(61,214,208,0.1); border-left-color: #3dd6d0; }
+.sidebar-nav a svg { width: 18px; height: 18px; flex-shrink: 0; }
+.sidebar-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 11px; color: rgba(255,255,255,0.3); }
+
+/* ===== MAIN AREA ===== */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ===== HEADER ===== */
+.header { background: #1a1f2e; color: #fff; padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; min-height: 60px; }
+.header-left { display: flex; align-items: center; gap: 14px; }
+.header-left h1 { font-size: 20px; font-weight: 600; }
+.badge { background: #3dd6d0; color: #1a1f2e; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 12px; letter-spacing: 0.8px; text-transform: uppercase; }
+
+
+/* ===== TABS ===== */
+.tabs { display: flex; background: #fff; border-bottom: 2px solid #e8e9ef; padding: 0 28px; }
+.tab-btn { padding: 14px 24px; font-size: 14px; font-weight: 600; color: #888; background: none; border: none; cursor: pointer; position: relative; transition: color 0.2s; }
+.tab-btn:hover { color: #555; }
+.tab-btn.active { color: #1a1f2e; }
+.tab-btn.active::after { content: ''; position: absolute; bottom: -2px; left: 0; right: 0; height: 3px; background: #1a1f2e; border-radius: 2px 2px 0 0; }
+
+/* ===== TAB CONTENT ===== */
+.tab-content { flex: 1; overflow-y: auto; padding: 28px; }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* ===== UPLOAD TAB ===== */
+.upload-header h2 { font-size: 22px; font-weight: 700; color: #1a1f2e; }
+.upload-header p { font-size: 14px; color: #888; margin-top: 4px; }
+.dropzone { border: 2px dashed #ccd0db; border-radius: 12px; padding: 60px 40px; text-align: center; margin-top: 24px; background: #fff; cursor: pointer; transition: all 0.25s; }
+.dropzone:hover, .dropzone.dragover { border-color: #3dd6d0; background: rgba(61,214,208,0.04); }
+.dropzone svg { width: 48px; height: 48px; color: #aab0c0; margin-bottom: 16px; }
+.dropzone.dragover svg { color: #3dd6d0; }
+.dropzone h3 { font-size: 16px; color: #555; font-weight: 600; }
+.dropzone p { font-size: 13px; color: #999; margin-top: 6px; }
+.dropzone .browse-link { color: #3dd6d0; text-decoration: underline; cursor: pointer; font-weight: 600; }
+
+/* file info bar */
+.file-info { display: none; margin-top: 20px; background: #fff; border-radius: 10px; padding: 18px 24px; border: 1px solid #e8e9ef; align-items: center; gap: 16px; }
+.file-info.show { display: flex; }
+.file-icon { width: 42px; height: 42px; background: rgba(61,214,208,0.12); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #3dd6d0; flex-shrink: 0; }
+.file-meta { flex: 1; }
+.file-meta .fname { font-weight: 600; font-size: 14px; color: #1a1f2e; }
+.file-meta .fsize { font-size: 12px; color: #999; margin-top: 2px; }
+.file-actions { display: flex; gap: 10px; }
+.btn { padding: 10px 22px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; }
+.btn-analyze { background: #27ae60; color: #fff; }
+.btn-analyze:hover { background: #219a52; }
+.btn-preview { background: rgba(61,214,208,0.12); color: #3dd6d0; border: 1px solid rgba(61,214,208,0.3); }
+.btn-preview:hover { background: rgba(61,214,208,0.2); }
+.btn-remove { background: rgba(231,76,60,0.1); color: #e74c3c; border: 1px solid rgba(231,76,60,0.2); }
+.btn-remove:hover { background: rgba(231,76,60,0.18); }
+.btn-refresh { background: rgba(61,214,208,0.12); color: #3dd6d0; border: 1px solid rgba(61,214,208,0.3); }
+.btn-refresh:hover { background: rgba(61,214,208,0.2); }
+
+/* uploaded file history */
+.upload-history { margin-top: 32px; }
+.upload-history h3 { font-size: 16px; font-weight: 700; color: #1a1f2e; margin-bottom: 12px; }
+.history-list { display: flex; flex-direction: column; gap: 8px; }
+.history-item { background: #fff; border: 1px solid #e8e9ef; border-radius: 8px; padding: 12px 18px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: all 0.2s; }
+.history-item:hover { border-color: #3dd6d0; background: rgba(61,214,208,0.03); }
+.history-item .h-icon { width: 32px; height: 32px; background: rgba(61,214,208,0.1); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #3dd6d0; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.history-item .h-info { flex: 1; }
+.history-item .h-name { font-size: 13px; font-weight: 600; color: #1a1f2e; }
+.history-item .h-detail { font-size: 11px; color: #999; margin-top: 2px; }
+.history-item .h-badge { font-size: 10px; padding: 3px 8px; border-radius: 10px; font-weight: 600; }
+.h-badge.analyzed { background: rgba(39,174,96,0.12); color: #27ae60; }
+.h-badge.pending { background: rgba(243,156,18,0.12); color: #f39c12; }
+.empty-history { text-align: center; padding: 20px; color: #aaa; font-size: 13px; }
+
+/* preview modal */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
+.modal-overlay.show { display: flex; }
+.modal { background: #fff; border-radius: 12px; width: 80%; max-width: 900px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+.modal-header { padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e8e9ef; }
+.modal-header h3 { font-size: 16px; font-weight: 700; color: #1a1f2e; }
+.modal-close { background: none; border: none; font-size: 22px; color: #999; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+.modal-close:hover { background: #f0f0f0; color: #333; }
+.modal-body { flex: 1; overflow-y: auto; padding: 0; }
+.modal-body pre { margin: 0; padding: 20px 24px; font-size: 12.5px; line-height: 1.7; font-family: 'Fira Code', 'Consolas', 'Monaco', monospace; color: #d4d4d4; background: #1e1e1e; white-space: pre-wrap; word-wrap: break-word; }
+
+/* loading spinner */
+.spinner-overlay { display: none; position: fixed; inset: 0; background: rgba(26,31,46,0.85); z-index: 300; align-items: center; justify-content: center; flex-direction: column; gap: 20px; }
+.spinner-overlay.show { display: flex; }
+.spinner { width: 48px; height: 48px; border: 4px solid rgba(61,214,208,0.2); border-top-color: #3dd6d0; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner-text { color: #fff; font-size: 15px; font-weight: 500; }
+
+/* ===== DASHBOARD TAB ===== */
+.dash-empty { text-align: center; padding: 80px 20px; }
+.dash-empty svg { width: 64px; height: 64px; color: #ccd0db; margin-bottom: 16px; }
+.dash-empty h3 { font-size: 18px; color: #888; font-weight: 600; }
+.dash-empty p { font-size: 14px; color: #aaa; margin-top: 8px; }
+
+.dash-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.dash-header-left h2 { font-size: 22px; font-weight: 700; color: #1a1f2e; }
+.dash-header-left p { font-size: 14px; color: #888; margin-top: 4px; }
+
+/* metric cards row */
+.metrics-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.metric-card { background: #1e2a3a; border-radius: 10px; padding: 20px; color: #fff; }
+.metric-card .mc-label { font-size: 11px; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+.metric-card .mc-value { font-size: 28px; font-weight: 700; }
+.metric-card .mc-sub { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 4px; }
+.mc-value.green { color: #27ae60; }
+.mc-value.teal { color: #3dd6d0; }
+.mc-value.warn { color: #f39c12; }
+.mc-value.red { color: #e74c3c; }
+
+/* section cards */
+.section-card { background: #fff; border-radius: 10px; padding: 24px; margin-bottom: 20px; border: 1px solid #e8e9ef; }
+.section-card h3 { font-size: 16px; font-weight: 700; color: #1a1f2e; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+.section-card h3 .sec-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+
+/* tables */
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table th { text-align: left; padding: 10px 14px; background: #f5f6fa; color: #666; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #e8e9ef; }
+.data-table td { padding: 10px 14px; border-bottom: 1px solid #f0f1f5; color: #444; vertical-align: top; }
+.data-table tr:hover td { background: rgba(61,214,208,0.03); }
+.pill { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.pill-green { background: rgba(39,174,96,0.12); color: #27ae60; }
+.pill-warn { background: rgba(243,156,18,0.12); color: #f39c12; }
+.pill-red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.pill-teal { background: rgba(61,214,208,0.12); color: #2ab5af; }
+.pill-blue { background: rgba(52,152,219,0.12); color: #2980b9; }
+.pill-gray { background: rgba(0,0,0,0.06); color: #777; }
+
+/* lineage tree */
+.lineage-tree { font-family: 'Fira Code', 'Consolas', monospace; font-size: 12.5px; line-height: 1.8; background: #1e2a3a; color: #d4d4d4; padding: 20px 24px; border-radius: 8px; overflow-x: auto; white-space: pre; }
+.lineage-tree .lt-source { color: #f39c12; }
+.lineage-tree .lt-ds { color: #e74c3c; }
+.lineage-tree .lt-wrapper { color: #9b59b6; }
+.lineage-tree .lt-bv { color: #3dd6d0; }
+.lineage-tree .lt-dv { color: #27ae60; }
+.lineage-tree .lt-arrow { color: #555; }
+.lineage-tree .lt-secure { color: #e74c3c; font-weight: 700; }
+.lineage-tree .lt-proc { color: #f1c40f; }
+
+/* complexity meter */
+.complexity-meter { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.complexity-bar { display: flex; gap: 4px; }
+.complexity-bar .cb-dot { width: 28px; height: 8px; border-radius: 4px; background: #e0e2ea; }
+.complexity-bar .cb-dot.filled-1 { background: #27ae60; }
+.complexity-bar .cb-dot.filled-2 { background: #7cc944; }
+.complexity-bar .cb-dot.filled-3 { background: #f39c12; }
+.complexity-bar .cb-dot.filled-4 { background: #e67e22; }
+.complexity-bar .cb-dot.filled-5 { background: #e74c3c; }
+
+/* risk badges */
+.risk-low { background: rgba(39,174,96,0.12); color: #27ae60; padding: 3px 12px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+.risk-medium { background: rgba(243,156,18,0.12); color: #f39c12; padding: 3px 12px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+.risk-high { background: rgba(231,76,60,0.12); color: #e74c3c; padding: 3px 12px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+
+/* two-col layout for dashboard sections */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 1100px) { .two-col { grid-template-columns: 1fr; } }
+
+/* scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+.tab-content::-webkit-scrollbar-thumb { background: #bbb; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h2><span>VQL</span> Analyzer</h2>
+    <p>Denodo to Snowflake</p>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="#" class="active" data-nav="main">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard
+    </a>
+    <a href="#" data-nav="upload">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Upload &amp; Analyze
+    </a>
+
+  </nav>
+  <div class="sidebar-footer">VQL Analyzer v1.0<br>Powered by CoCo Skill</div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <h1>VQL Analyzer</h1>
+      <span class="badge">ANALYSIS HUB</span>
+    </div>
+
+  </header>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab-btn" data-tab="tab-upload">Upload &amp; Analyze</button>
+    <button class="tab-btn" data-tab="tab-dashboard">Dashboard</button>
+  </div>
+
+  <!-- TAB CONTENT -->
+  <div class="tab-content">
+
+    <!-- TAB: Upload & Analyze -->
+    <div class="tab-pane" id="tab-upload">
+      <div class="upload-header">
+        <h2>Upload VQL File</h2>
+        <p>Upload your .vql file to analyze configurations</p>
+      </div>
+
+      <div class="dropzone" id="dropzone">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <h3>Drag &amp; drop your .vql file here</h3>
+        <p>or <span class="browse-link">click to browse</span></p>
+        <p style="margin-top:10px;font-size:11px;color:#bbb;">Only .vql files accepted</p>
+        <input type="file" id="fileInput" accept=".vql" style="display:none">
+      </div>
+
+      <div class="file-info" id="fileInfo">
+        <div class="file-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div class="file-meta">
+          <div class="fname" id="fileName">--</div>
+          <div class="fsize" id="fileSize">--</div>
+        </div>
+        <div class="file-actions">
+          <button class="btn btn-preview" onclick="previewFile()">Preview</button>
+          <button class="btn btn-analyze" id="analyzeBtn" onclick="analyzeFile()">Analyze</button>
+          <button class="btn btn-remove" onclick="removeFile()">Remove</button>
+        </div>
+      </div>
+
+      <!-- History of previously uploaded files -->
+      <div class="upload-history" id="uploadHistory">
+        <h3>Previously Uploaded Files</h3>
+        <div class="history-list" id="historyList">
+          <div class="empty-history">No files uploaded yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Dashboard -->
+    <div class="tab-pane" id="tab-dashboard">
+      <div id="dashEmpty" class="dash-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        <h3>No analysis data yet</h3>
+        <p>Upload a .vql file to get started.</p>
+      </div>
+      <div id="dashContent" style="display:none;"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal-overlay" id="previewModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="previewTitle">File Preview</h3>
+      <button class="modal-close" onclick="closePreview()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <pre id="previewContent"></pre>
+    </div>
+  </div>
+</div>
+
+<!-- Spinner -->
+<div class="spinner-overlay" id="spinnerOverlay">
+  <div class="spinner"></div>
+  <div class="spinner-text">Analyzing VQL file...</div>
+</div>
+
+<script>
+// ===== STATE =====
+let currentFile = null;
+let currentFileContent = '';
+let uploadedFiles = []; // {name, size, content, analyzed: bool, analysis: obj|null, timestamp}
+let currentAnalysis = null;
+
+// ===== LOCAL STORAGE PERSISTENCE =====
+function saveState() {
+  try {
+    const data = { uploadedFiles, currentAnalysis };
+    localStorage.setItem('vql_analyzer_state', JSON.stringify(data));
+  } catch (e) { /* storage full or unavailable */ }
+}
+function loadState() {
+  try {
+    const raw = localStorage.getItem('vql_analyzer_state');
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data.uploadedFiles) {
+      uploadedFiles = data.uploadedFiles.map(f => ({ ...f, timestamp: new Date(f.timestamp) }));
+    }
+    if (data.currentAnalysis) currentAnalysis = data.currentAnalysis;
+  } catch (e) { /* corrupted data, ignore */ }
+}
+
+// ===== TABS =====
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+  });
+});
+// default tab
+document.querySelector('[data-tab="tab-upload"]').classList.add('active');
+document.getElementById('tab-upload').classList.add('active');
+
+// ===== RESTORE SAVED STATE =====
+loadState();
+if (uploadedFiles.length > 0) renderHistory();
+if (currentAnalysis) {
+  renderDashboard(currentAnalysis);
+  document.querySelector('[data-tab="tab-dashboard"]').click();
+  document.querySelectorAll('.sidebar-nav a').forEach(l => l.classList.remove('active'));
+  document.querySelector('[data-nav="main"]').classList.add('active');
+}
+
+// ===== SIDEBAR NAV =====
+document.querySelectorAll('.sidebar-nav a').forEach(link => {
+  link.addEventListener('click', e => {
+    e.preventDefault();
+    document.querySelectorAll('.sidebar-nav a').forEach(l => l.classList.remove('active'));
+    link.classList.add('active');
+    const nav = link.dataset.nav;
+    if (nav === 'upload') {
+      document.querySelector('[data-tab="tab-upload"]').click();
+    } else if (nav === 'main') {
+      document.querySelector('[data-tab="tab-dashboard"]').click();
+    }
+  });
+});
+
+
+
+// ===== DRAG AND DROP =====
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  const files = e.dataTransfer.files;
+  if (files.length > 0) handleFile(files[0]);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files.length > 0) handleFile(e.target.files[0]);
+});
+
+function handleFile(file) {
+  if (!file.name.endsWith('.vql')) {
+    alert('Only .vql files are accepted.');
+    return;
+  }
+  currentFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    currentFileContent = e.target.result;
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('fileSize').textContent = formatSize(file.size) + ' \u00b7 ' + countLines(currentFileContent) + ' lines';
+    document.getElementById('fileInfo').classList.add('show');
+  };
+  reader.readAsText(file);
+}
+
+function removeFile() {
+  currentFile = null;
+  currentFileContent = '';
+  document.getElementById('fileInfo').classList.remove('show');
+  fileInput.value = '';
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function countLines(str) { return str.split('\n').length; }
+
+// ===== PREVIEW =====
+function previewFile(content, name) {
+  const c = content || currentFileContent;
+  const n = name || (currentFile ? currentFile.name : 'File');
+  if (!c) return;
+  document.getElementById('previewTitle').textContent = n;
+  document.getElementById('previewContent').textContent = c;
+  document.getElementById('previewModal').classList.add('show');
+}
+function closePreview() {
+  document.getElementById('previewModal').classList.remove('show');
+}
+document.getElementById('previewModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closePreview();
+});
+
+// ===== ANALYZE =====
+function analyzeFile() {
+  if (!currentFileContent) return;
+  const spinner = document.getElementById('spinnerOverlay');
+  spinner.classList.add('show');
+
+  setTimeout(() => {
+    try {
+      const analysis = parseVQL(currentFileContent, currentFile.name);
+      currentAnalysis = analysis;
+
+      // add to history
+      const entry = {
+        name: currentFile.name,
+        size: currentFile.size,
+        content: currentFileContent,
+        analyzed: true,
+        analysis: analysis,
+        timestamp: new Date()
+      };
+      // replace if same name already exists
+      const idx = uploadedFiles.findIndex(f => f.name === entry.name);
+      if (idx >= 0) uploadedFiles[idx] = entry;
+      else uploadedFiles.push(entry);
+
+      renderHistory();
+      renderDashboard(analysis);
+      saveState();
+      spinner.classList.remove('show');
+
+      // switch to dashboard
+      document.querySelector('[data-tab="tab-dashboard"]').click();
+      document.querySelectorAll('.sidebar-nav a').forEach(l => l.classList.remove('active'));
+      document.querySelector('[data-nav="main"]').classList.add('active');
+    } catch (err) {
+      spinner.classList.remove('show');
+      alert('Error parsing VQL: ' + err.message);
+    }
+  }, 800);
+}
+
+// ===== HISTORY =====
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  if (uploadedFiles.length === 0) {
+    list.innerHTML = '<div class="empty-history">No files uploaded yet.</div>';
+    return;
+  }
+  list.innerHTML = uploadedFiles.map((f, i) => `
+    <div class="history-item" onclick="loadHistoryItem(${i})">
+      <div class="h-icon">VQL</div>
+      <div class="h-info">
+        <div class="h-name">${esc(f.name)}</div>
+        <div class="h-detail">${formatSize(f.size)} &middot; ${f.timestamp.toLocaleString()}</div>
+      </div>
+      <span class="h-badge ${f.analyzed ? 'analyzed' : 'pending'}">${f.analyzed ? 'Analyzed' : 'Pending'}</span>
+      <button class="btn btn-preview" style="padding:6px 14px;font-size:12px;" onclick="event.stopPropagation(); previewFile(uploadedFiles[${i}].content, uploadedFiles[${i}].name);">Preview</button>
+    </div>
+  `).join('');
+}
+
+function loadHistoryItem(idx) {
+  const f = uploadedFiles[idx];
+  if (f.analyzed && f.analysis) {
+    currentAnalysis = f.analysis;
+    renderDashboard(f.analysis);
+    document.querySelector('[data-tab="tab-dashboard"]').click();
+    document.querySelectorAll('.sidebar-nav a').forEach(l => l.classList.remove('active'));
+    document.querySelector('[data-nav="main"]').classList.add('active');
+  }
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// ============================================
+// VQL PARSER — modeled after CoCo vql-analysis skill
+// ============================================
+function parseVQL(content, filename) {
+  const lines = content.split('\n');
+  const lineCount = lines.length;
+
+  // ---- Folders ----
+  const folders = [];
+  const folderRe = /CREATE\s+OR\s+REPLACE\s+FOLDER\s+'([^']+)'/gi;
+  let m;
+  while ((m = folderRe.exec(content)) !== null) {
+    folders.push({ path: m[1], purpose: inferFolderPurpose(m[1]) });
+  }
+
+  // ---- Data Sources ----
+  const dataSources = [];
+  const dsBlocks = content.match(/CREATE\s+OR\s+REPLACE\s+DATASOURCE\s+(JDBC|JSON|SOAP|CUSTOM|XML|ODBC)\s+[\s\S]*?;/gi) || [];
+  dsBlocks.forEach(block => {
+    const typeM = block.match(/DATASOURCE\s+(JDBC|JSON|SOAP|CUSTOM|XML|ODBC)\s+(\S+)/i);
+    if (!typeM) return;
+    const ds = {
+      name: typeM[2],
+      type: typeM[1].toUpperCase(),
+      system: inferSystem(block, typeM[1]),
+      host: extractHost(block),
+      auth: extractAuth(block),
+      pool: extractPool(block),
+      folder: extractAttr(block, 'FOLDER')
+    };
+    dataSources.push(ds);
+  });
+
+  // ---- Wrappers ----
+  const wrappers = [];
+  const wBlocks = content.match(/CREATE\s+OR\s+REPLACE\s+WRAPPER\s+(JDBC|JSON|SOAP|CUSTOM)\s+[\s\S]*?;/gi) || [];
+  wBlocks.forEach(block => {
+    const wm = block.match(/WRAPPER\s+(JDBC|JSON|SOAP|CUSTOM)\s+(\S+)/i);
+    if (!wm) return;
+    const dsNameM = block.match(/DATASOURCENAME\s*=\s*(\S+)/i);
+    const schemaM = block.match(/SCHEMANAME\s*=\s*'([^']+)'/i);
+    const relM = block.match(/RELATIONNAME\s*=\s*'([^']+)'/i);
+    const objM = block.match(/OBJECTNAME\s*=\s*'([^']+)'/i);
+    const cols = extractWrapperColumns(block);
+    const hasArray = /ARRAY\s+OF/i.test(block);
+    const hasRegister = /REGISTER\s+OF/i.test(block);
+    const hasTupleRoot = /TUPLEROOT/i.test(block);
+    const hasInputMsg = /INPUTMESSAGE/i.test(block);
+    wrappers.push({
+      name: wm[2],
+      type: wm[1].toUpperCase(),
+      dataSource: dsNameM ? dsNameM[1] : '?',
+      schema: schemaM ? schemaM[1] : null,
+      relation: relM ? relM[1] : (objM ? objM[1] : null),
+      columns: cols,
+      specialFeatures: [hasArray && 'ARRAY OF', hasRegister && 'REGISTER OF', hasTupleRoot && 'TUPLEROOT', hasInputMsg && 'INPUTMESSAGE'].filter(Boolean)
+    });
+  });
+
+  // ---- Base Views ----
+  const baseViews = [];
+  const bvRe = /CREATE\s+OR\s+REPLACE\s+TABLE\s+(\S+)\s+I18N\s+(\S+)\s*\([\s\S]*?\)\s*(?:FOLDER\s*=\s*'([^']*)')?\s*(CACHE\s+(?:OFF|FULL|PARTIAL))?\s*(?:TIMETOLIVEINCACHE\s+(\S+))?\s*[\s\S]*?ADD\s+SEARCHMETHOD\s+(\S+)/gi;
+  while ((m = bvRe.exec(content)) !== null) {
+    const bvBlock = content.substring(m.index, content.indexOf(';', m.index + m[0].length) + 1);
+    const cols = extractBaseViewColumns(bvBlock, m[1]);
+    const cacheM = bvBlock.match(/CACHE\s+(OFF|FULL|PARTIAL)/i);
+    const ttlM = bvBlock.match(/TIMETOLIVEINCACHE\s+(\S+)/i);
+    const folderM = bvBlock.match(/FOLDER\s*=\s*'([^']*)'/i);
+    const constraints = extractConstraints(bvBlock);
+    baseViews.push({
+      name: m[1],
+      i18n: m[2],
+      wrapper: m[6],
+      columns: cols,
+      cache: cacheM ? cacheM[1].toUpperCase() : 'OFF',
+      ttl: ttlM ? formatTTL(ttlM[1]) : 'DEFAULT',
+      folder: folderM ? folderM[1] : '',
+      constraints: constraints
+    });
+  }
+
+  // ---- Derived Views ----
+  const derivedViews = [];
+  const dvRe = /CREATE\s+OR\s+REPLACE\s+VIEW\s+(\S+)\s+(?:FOLDER\s*=\s*'([^']*)')?\s*(?:\(([^)]*)\))?\s*AS\s+([\s\S]*?)(?=CREATE\s+OR\s+REPLACE|ALTER\s+VIEW|GRANT\s+|DESC\s+V|DESC\s+VIRTUALTABLE|$)/gi;
+  while ((m = dvRe.exec(content)) !== null) {
+    const name = m[1];
+    const folder = m[2] || '';
+    const params = m[3] ? m[3].trim() : null;
+    const body = m[4].replace(/;\s*$/, '').trim();
+    const sourceViews = extractSourceViews(body);
+    const joinTypes = extractJoinTypes(body);
+    const transforms = extractTransformations(body);
+    const isCrossSource = checkCrossSource(sourceViews, baseViews, wrappers, dataSources);
+
+    derivedViews.push({
+      name,
+      folder,
+      params,
+      sourceViews,
+      joinTypes,
+      transforms,
+      crossSource: isCrossSource,
+      hasWhere: /WHERE\s+/i.test(body),
+      body
+    });
+  }
+
+  // compute depths
+  const depthMap = {};
+  derivedViews.forEach(dv => {
+    depthMap[dv.name] = computeDepth(dv.name, derivedViews, {});
+  });
+  derivedViews.forEach(dv => { dv.depth = depthMap[dv.name] || 1; });
+
+  // ---- Stored Procedures ----
+  const procedures = [];
+  const procRe = /CREATE\s+OR\s+REPLACE\s+PROCEDURE\s+(\S+)\s*\(([\s\S]*?)\)\s*(?:FOLDER\s*=\s*'([^']*)')?\s*AS\s*\(([\s\S]*?)\);/gi;
+  while ((m = procRe.exec(content)) !== null) {
+    const paramStr = m[2].trim();
+    const body = m[4].trim();
+    const refs = extractSourceViews(body);
+    procedures.push({
+      name: m[1],
+      params: paramStr || 'none',
+      folder: m[3] || '',
+      referencedViews: refs,
+      bodySummary: summarizeProcBody(body)
+    });
+  }
+
+  // ---- Security ----
+  const security = { rowLevel: [], columnMasking: [], grants: [] };
+  // row-level: views with GETUSERNAME()
+  derivedViews.forEach(dv => {
+    if (/GETUSERNAME\s*\(\s*\)/i.test(dv.body)) {
+      security.rowLevel.push({ view: dv.name, mechanism: 'GETUSERNAME() filter' });
+    }
+  });
+  // column masking
+  const maskRe = /ALTER\s+VIEW\s+(\S+)\s+ALTER\s+COLUMN\s+(\S+)\s+ADD\s+COLUMNPRIVILEGES\s*\(([\s\S]*?)\);/gi;
+  while ((m = maskRe.exec(content)) !== null) {
+    const roles = [];
+    const roleRe = /ROLE\s+(\S+)\s*:\s*(VISIBLE|HIDDEN)/gi;
+    let rm;
+    while ((rm = roleRe.exec(m[3])) !== null) {
+      roles.push({ role: rm[1], access: rm[2] });
+    }
+    const defM = m[3].match(/DEFAULT\s*:\s*(VISIBLE|HIDDEN)/i);
+    security.columnMasking.push({
+      view: m[1],
+      column: m[2],
+      roles,
+      default: defM ? defM[1] : 'VISIBLE'
+    });
+  }
+  // grants
+  const grantRe = /GRANT\s+(READ|EXECUTE)\s+ON\s+(?:PROCEDURE\s+)?(\S+)\s+TO\s+ROLE\s+(\S+)\s*;/gi;
+  while ((m = grantRe.exec(content)) !== null) {
+    security.grants.push({ permission: m[1], object: m[2], role: m[3] });
+  }
+
+  // ---- Cache & Scheduling ----
+  const cacheBreakdown = { FULL: 0, PARTIAL: 0, OFF: 0 };
+  baseViews.forEach(bv => { cacheBreakdown[bv.cache]++; });
+
+  const jobs = [];
+  const jobRe = /CREATE\s+OR\s+REPLACE\s+JOB\s+(\S+)\s*(?:FOLDER\s*=\s*'([^']*)')?\s*SCHEDULE\s*=\s*CRON\s+'([^']+)'\s*(?:DESCRIPTION\s*=\s*'([^']*)')?\s*\(([\s\S]*?)\);/gi;
+  while ((m = jobRe.exec(content)) !== null) {
+    const refreshCalls = [];
+    const crRe = /CACHE_REFRESH\s*\(\s*'([^']+)'\s*\)/gi;
+    let cr;
+    while ((cr = crRe.exec(m[5])) !== null) refreshCalls.push(cr[1]);
+    jobs.push({
+      name: m[1],
+      folder: m[2] || '',
+      cron: m[3],
+      description: m[4] || '',
+      refreshTargets: refreshCalls
+    });
+  }
+
+  // ---- Metadata (DESC) ----
+  const metadata = [];
+  const descRe = /DESC\s+(?:VIRTUALTABLE|VIEW)\s+(\S+)\s*\(([\s\S]*?)\);/gi;
+  while ((m = descRe.exec(content)) !== null) {
+    const cols = [];
+    const colRe = /(\w+)\s*=\s*'([^']*)'/g;
+    let cm;
+    while ((cm = colRe.exec(m[2])) !== null) {
+      cols.push({ column: cm[1], description: cm[2] });
+    }
+    metadata.push({ view: m[1], columns: cols });
+  }
+
+  // ---- Complexity ----
+  const maxDepth = derivedViews.length > 0 ? Math.max(...derivedViews.map(d => d.depth)) : 0;
+  const crossSourceCount = derivedViews.filter(d => d.crossSource).length;
+  const complexity = computeComplexity(dataSources, baseViews, derivedViews, procedures, jobs, security, maxDepth, crossSourceCount);
+
+  // ---- Lineage ----
+  const lineageTree = buildLineageTree(dataSources, wrappers, baseViews, derivedViews, procedures, security);
+  const dependencyTable = buildDependencyTable(derivedViews);
+
+  // ---- Migration Readiness ----
+  const migration = computeMigrationReadiness(dataSources, baseViews, derivedViews, procedures, jobs, security, cacheBreakdown);
+
+  return {
+    filename,
+    lineCount,
+    complexity,
+    folders,
+    dataSources,
+    wrappers,
+    baseViews,
+    derivedViews,
+    procedures,
+    security,
+    cacheBreakdown,
+    jobs,
+    metadata,
+    maxDepth,
+    crossSourceCount,
+    lineageTree,
+    dependencyTable,
+    migration
+  };
+}
+
+// ===== PARSER HELPERS =====
+
+function inferFolderPurpose(path) {
+  const p = path.toLowerCase();
+  if (/source/i.test(p)) return 'Sources';
+  if (/staging/i.test(p)) return 'Staging';
+  if (/integration/i.test(p)) return 'Integration';
+  if (/business/i.test(p)) return 'Business';
+  if (/canonical/i.test(p)) return 'Canonical';
+  if (/analytics/i.test(p)) return 'Analytics';
+  if (/secure/i.test(p)) return 'Security';
+  if (/procedure/i.test(p)) return 'Procedures';
+  if (/view/i.test(p)) return 'Views';
+  return 'General';
+}
+
+function inferSystem(block, type) {
+  const b = block.toLowerCase();
+  if (type.toUpperCase() === 'JSON') return 'REST API';
+  if (type.toUpperCase() === 'SOAP') return 'SOAP Web Service';
+  if (/salesforce/i.test(b)) return 'Salesforce';
+  if (/elasticsearch/i.test(b)) return 'Elasticsearch';
+  if (/sap/i.test(b) || /bapi/i.test(b)) return 'SAP BAPI';
+  if (/oracle/i.test(b)) return 'Oracle';
+  if (/postgresql|postgres/i.test(b)) return 'PostgreSQL';
+  if (/mysql/i.test(b)) return 'MySQL';
+  if (/sqlserver|sql\s*server/i.test(b)) return 'SQL Server';
+  if (type.toUpperCase() === 'CUSTOM') return 'Custom';
+  return type;
+}
+
+function extractHost(block) {
+  const uri = block.match(/DATABASEURI\s*=\s*'([^']+)'/i);
+  if (uri) {
+    let h = uri[1];
+    // extract host:port portion
+    const hm = h.match(/@([^/;]+)/);
+    if (hm) return hm[1].substring(0, 60);
+    const hm2 = h.match(/:\/\/([^/;]+)/);
+    if (hm2) return hm2[1].substring(0, 60);
+    return h.substring(0, 60);
+  }
+  const route = block.match(/ROUTE\s+HTTP\s+'([^']+)'/i);
+  if (route) return route[1].substring(0, 60);
+  const wsdl = block.match(/WSDLURI\s*=\s*'([^']+)'/i);
+  if (wsdl) return wsdl[1].substring(0, 60);
+  const cls = block.match(/CLASSNAME\s*=\s*'([^']+)'/i);
+  if (cls) return cls[1].split('.').pop();
+  return '-';
+}
+
+function extractAuth(block) {
+  if (/AUTHENTICATION\s+OAUTH2/i.test(block)) return 'OAUTH2';
+  if (/AUTHENTICATION\s+BASIC/i.test(block)) return 'BASIC';
+  if (/AUTHENTICATION\s+OFF/i.test(block)) return 'NONE';
+  if (/USERNAME\s*=/i.test(block)) return 'BASIC';
+  return 'NONE';
+}
+
+function extractPool(block) {
+  const init = block.match(/INITIALSIZE\s*=\s*(\d+)/i);
+  const max = block.match(/MAXACTIVE\s*=\s*(\d+)/i);
+  const fetch = block.match(/FETCHSIZE\s*=\s*(\d+)/i);
+  const exh = block.match(/EXHAUSTEDACTION\s*=\s*(\S+)/i);
+  return {
+    initialSize: init ? +init[1] : null,
+    maxActive: max ? +max[1] : null,
+    fetchSize: fetch ? +fetch[1] : null,
+    exhaustedAction: exh ? exh[1] : null
+  };
+}
+
+function extractAttr(block, attr) {
+  const re = new RegExp(attr + "\\s*=\\s*'([^']*)'", 'i');
+  const m = block.match(re);
+  return m ? m[1] : '';
+}
+
+function extractWrapperColumns(block) {
+  const cols = [];
+  const section = block.match(/OUTPUTSCHEMA\s*\(([\s\S]*?)\)\s*(?:;|\))/i);
+  if (!section) return cols;
+  const colRe = /(\w+)\s*=\s*'([^']+)'\s*:\s*'([^']+)'/g;
+  let cm;
+  while ((cm = colRe.exec(section[1])) !== null) {
+    const notNull = /NOT\s+NULL/i.test(section[1].substring(cm.index, section[1].indexOf('\n', cm.index + 1)));
+    cols.push({ name: cm[1], sourceCol: cm[2], javaType: cm[3].split('.').pop(), notNull });
+  }
+  return cols;
+}
+
+function extractBaseViewColumns(block, name) {
+  // match columns between TABLE name I18N xxx ( ... )
+  const re = new RegExp(name + '\\s+I18N\\s+\\S+\\s*\\(([\\s\\S]*?)\\)', 'i');
+  const m = block.match(re);
+  if (!m) return [];
+  const cols = [];
+  const colRe = /(\w+)\s*:\s*(\w+)/g;
+  let cm;
+  while ((cm = colRe.exec(m[1])) !== null) {
+    cols.push({ name: cm[1], type: cm[2] });
+  }
+  return cols;
+}
+
+function extractConstraints(block) {
+  const cons = [];
+  const re = /ADD\s+(\w+)\s+NOS\s+ZERO/gi;
+  let m;
+  while ((m = re.exec(block)) !== null) {
+    cons.push(m[1]);
+  }
+  return cons;
+}
+
+function formatTTL(val) {
+  if (val === 'DEFAULT' || val === 'default') return 'DEFAULT';
+  const ms = parseInt(val, 10);
+  if (isNaN(ms)) return val;
+  if (ms >= 86400000) return (ms / 86400000).toFixed(0) + 'd';
+  if (ms >= 3600000) return (ms / 3600000).toFixed(1).replace('.0', '') + 'h';
+  if (ms >= 60000) return (ms / 60000).toFixed(0) + 'm';
+  return (ms / 1000).toFixed(0) + 's';
+}
+
+function extractSourceViews(body) {
+  const views = new Set();
+  // FROM clause
+  const fromRe = /\bFROM\s+(\w+)/gi;
+  let m;
+  while ((m = fromRe.exec(body)) !== null) {
+    const v = m[1].toLowerCase();
+    if (!['select','where','case','when','then','else','end','and','or','not','null','as','on','group','order','by','having','union','all','inner','left','right','cross','join','in','exists'].includes(v)) {
+      views.add(m[1]);
+    }
+  }
+  // JOIN clause
+  const joinRe = /\bJOIN\s+(\w+)/gi;
+  while ((m = joinRe.exec(body)) !== null) {
+    const v = m[1].toLowerCase();
+    if (!['select','where','on'].includes(v)) {
+      views.add(m[1]);
+    }
+  }
+  return [...views];
+}
+
+function extractJoinTypes(body) {
+  const types = new Set();
+  if (/\bINNER\s+JOIN\b/i.test(body)) types.add('INNER');
+  if (/\bLEFT\s+(?:OUTER\s+)?JOIN\b/i.test(body)) types.add('LEFT');
+  if (/\bRIGHT\s+(?:OUTER\s+)?JOIN\b/i.test(body)) types.add('RIGHT');
+  if (/\bCROSS\s+JOIN\b/i.test(body)) types.add('CROSS');
+  if (/\bFLATTEN\b/i.test(body)) types.add('FLATTEN');
+  // self-join detection
+  const aliases = body.match(/\b(\w+)\s+AS\s+(\w+)/gi) || [];
+  const tables = aliases.map(a => a.split(/\s+AS\s+/i)[0].trim());
+  if (new Set(tables).size < tables.length) types.add('SELF-JOIN');
+  return [...types];
+}
+
+function extractTransformations(body) {
+  const t = [];
+  if (/\bCASE\b/i.test(body)) t.push('CASE/WHEN');
+  if (/\bCOALESCE\b/i.test(body)) t.push('COALESCE');
+  if (/\bNULLIF\b/i.test(body)) t.push('NULLIF');
+  if (/\bCOUNT\s*\(/i.test(body) || /\bSUM\s*\(/i.test(body) || /\bAVG\s*\(/i.test(body) || /\bMIN\s*\(/i.test(body) || /\bMAX\s*\(/i.test(body)) t.push('Aggregations');
+  if (/\bGROUP\s+BY\b/i.test(body)) t.push('GROUP BY');
+  if (/\bROW_NUMBER\b/i.test(body)) t.push('ROW_NUMBER');
+  if (/\bRANK\s*\(/i.test(body)) t.push('RANK');
+  if (/\bNTILE\b/i.test(body)) t.push('NTILE');
+  if (/\bLAG\s*\(/i.test(body)) t.push('LAG');
+  if (/\bLEAD\s*\(/i.test(body)) t.push('LEAD');
+  if (/\bSUM\s*\(.*?\)\s*OVER\b/i.test(body) || /\bAVG\s*\(.*?\)\s*OVER\b/i.test(body)) t.push('Window Agg');
+  if (/\bUNION\b/i.test(body)) t.push('UNION');
+  if (/\bFLATTEN\b/i.test(body)) t.push('FLATTEN');
+  if (/\bCONCAT\b/i.test(body)) t.push('CONCAT');
+  if (/\bCAST\s*\(/i.test(body)) t.push('CAST');
+  if (/\bYEAR\s*\(/i.test(body) || /\bMONTH\s*\(/i.test(body) || /\bCURRENT_DATE\b/i.test(body)) t.push('Date functions');
+  if (/SELECT\s+[\s\S]*?\(\s*SELECT\b/i.test(body)) t.push('Subquery');
+  if (/[+\-*\/]\s/i.test(body)) t.push('Arithmetic');
+  return t;
+}
+
+function checkCrossSource(sourceViews, baseViews, wrappers, dataSources) {
+  const sources = new Set();
+  sourceViews.forEach(sv => {
+    const bv = baseViews.find(b => b.name === sv);
+    if (bv) {
+      const w = wrappers.find(wr => wr.name === bv.wrapper);
+      if (w) sources.add(w.dataSource);
+    }
+  });
+  return sources.size > 1;
+}
+
+function computeDepth(name, allDv, memo) {
+  if (memo[name] !== undefined) return memo[name];
+  const dv = allDv.find(d => d.name === name);
+  if (!dv) { memo[name] = 0; return 0; }
+  let maxChildDepth = 0;
+  dv.sourceViews.forEach(sv => {
+    if (allDv.find(d => d.name === sv)) {
+      maxChildDepth = Math.max(maxChildDepth, computeDepth(sv, allDv, memo));
+    }
+  });
+  memo[name] = maxChildDepth + 1;
+  return memo[name];
+}
+
+function summarizeProcBody(body) {
+  const parts = [];
+  if (/CACHE_REFRESH/i.test(body)) parts.push('Cache refresh');
+  if (/SELECT/i.test(body)) parts.push('Query');
+  if (/GROUP\s+BY/i.test(body)) parts.push('Aggregation');
+  if (/WHERE/i.test(body)) parts.push('Filtered');
+  return parts.join(', ') || 'Logic block';
+}
+
+function computeComplexity(ds, bv, dv, proc, jobs, sec, maxDepth, crossSrc) {
+  let score = 0;
+  // sources
+  score += Math.min(ds.length, 3); // up to 3
+  const uniqueTypes = new Set(ds.map(d => d.type));
+  if (uniqueTypes.size > 1) score += uniqueTypes.size - 1;
+  // views
+  score += Math.min(Math.floor(dv.length / 2), 3);
+  // depth
+  score += Math.min(maxDepth, 4);
+  // cross source
+  score += Math.min(crossSrc * 2, 4);
+  // transformations
+  const allTransforms = new Set();
+  dv.forEach(d => d.transforms.forEach(t => allTransforms.add(t)));
+  score += Math.min(Math.floor(allTransforms.size / 3), 3);
+  // security
+  if (sec.rowLevel.length > 0) score += 2;
+  if (sec.columnMasking.length > 0) score += 2;
+  if (sec.grants.length > 0) score += 1;
+  // procedures
+  score += Math.min(proc.length, 2);
+  // jobs
+  score += Math.min(jobs.length, 2);
+
+  // normalize to 1-5
+  if (score <= 3) return { rating: 1, label: 'Basic' };
+  if (score <= 8) return { rating: 2, label: 'Moderate' };
+  if (score <= 15) return { rating: 3, label: 'Intermediate' };
+  if (score <= 22) return { rating: 4, label: 'Complex' };
+  return { rating: 5, label: 'Enterprise' };
+}
+
+function buildLineageTree(ds, wrappers, bv, dv, proc, sec) {
+  // Group base views by source system
+  const groups = {};
+  bv.forEach(b => {
+    const w = wrappers.find(wr => wr.name === b.wrapper);
+    const d = w ? ds.find(dd => dd.name === w.dataSource) : null;
+    const sysName = d ? `[${d.system}] ${d.name}` : '[Unknown]';
+    if (!groups[sysName]) groups[sysName] = [];
+    groups[sysName].push({ bv: b, wrapper: w, ds: d });
+  });
+
+  let tree = '';
+  for (const [src, items] of Object.entries(groups)) {
+    tree += `<span class="lt-source">${esc(src)}</span>\n`;
+    items.forEach((item, idx) => {
+      const isLast = idx === items.length - 1;
+      const prefix = isLast ? '  \u2514\u2500' : '  \u251c\u2500';
+      tree += `${prefix} <span class="lt-wrapper">${esc(item.wrapper ? item.wrapper.name : '?')}</span> <span class="lt-arrow">\u2192</span> <span class="lt-bv">${esc(item.bv.name)}</span>\n`;
+
+      // find derived views that reference this base view
+      const children = dv.filter(d => d.sourceViews.includes(item.bv.name));
+      children.forEach(c => {
+        const inner = isLast ? '     ' : '  \u2502  ';
+        tree += `${inner}\u2514\u2500 <span class="lt-dv">${esc(c.name)}</span>${c.crossSource ? ' <span class="lt-secure">[CROSS-SOURCE]</span>' : ''}\n`;
+        // recursively show deeper levels
+        tree += buildSubTree(c.name, dv, inner + '   ', sec, new Set());
+      });
+    });
+    tree += '\n';
+  }
+
+  // procedures
+  if (proc.length > 0) {
+    tree += '<span class="lt-proc">[Stored Procedures]</span>\n';
+    proc.forEach(p => {
+      tree += `  \u2514\u2500 <span class="lt-proc">${esc(p.name)}</span> \u2192 refs: ${p.referencedViews.join(', ') || 'none'}\n`;
+    });
+  }
+
+  return tree;
+}
+
+function buildSubTree(name, allDv, prefix, sec, visited) {
+  if (visited.has(name)) return '';
+  visited.add(name);
+  let result = '';
+  const children = allDv.filter(d => d.sourceViews.includes(name));
+  children.forEach((c, i) => {
+    const isSecure = sec.rowLevel.some(r => r.view === c.name);
+    const label = isSecure
+      ? `<span class="lt-secure">${esc(c.name)} [SECURE]</span>`
+      : `<span class="lt-dv">${esc(c.name)}</span>`;
+    result += `${prefix}\u2514\u2500 ${label}${c.crossSource ? ' <span class="lt-secure">[CROSS-SRC]</span>' : ''}\n`;
+    result += buildSubTree(c.name, allDv, prefix + '   ', sec, visited);
+  });
+  return result;
+}
+
+function buildDependencyTable(dv) {
+  return dv.map(d => ({
+    name: d.name,
+    dependsOn: d.sourceViews.join(', '),
+    depth: d.depth
+  }));
+}
+
+function computeMigrationReadiness(ds, bv, dv, proc, jobs, sec, cacheBreak) {
+  const direct = [];
+  const rework = [];
+  const risks = { low: [], medium: [], high: [] };
+
+  // Direct mappings
+  ds.forEach(d => {
+    if (d.type === 'JDBC') direct.push({ construct: `DATASOURCE JDBC (${d.name})`, snowflake: 'External Stage / Direct Table' });
+  });
+  bv.forEach(b => {
+    if (b.cache === 'OFF') direct.push({ construct: `Base View: ${b.name} (no cache)`, snowflake: 'VIEW' });
+    if (b.cache === 'FULL') direct.push({ construct: `Base View: ${b.name} (CACHE FULL)`, snowflake: 'TABLE or DYNAMIC TABLE' });
+  });
+  dv.forEach(d => {
+    if (d.transforms.length <= 2 && !d.crossSource) {
+      direct.push({ construct: `Derived View: ${d.name} (simple)`, snowflake: 'VIEW' });
+    }
+  });
+  if (proc.length > 0) direct.push({ construct: 'Stored Procedures', snowflake: 'Snowflake Stored Procedure (SQL/Python)' });
+
+  // Standard SQL
+  const hasJoins = dv.some(d => d.joinTypes.length > 0);
+  if (hasJoins) { direct.push({ construct: 'JOIN operations', snowflake: 'Same syntax in Snowflake SQL' }); risks.low.push('JOIN operations'); }
+  const hasAgg = dv.some(d => d.transforms.includes('Aggregations') || d.transforms.includes('GROUP BY'));
+  if (hasAgg) { direct.push({ construct: 'GROUP BY / Aggregations', snowflake: 'Same syntax in Snowflake SQL' }); risks.low.push('Aggregations'); }
+  const hasCase = dv.some(d => d.transforms.includes('CASE/WHEN'));
+  if (hasCase) { direct.push({ construct: 'CASE/WHEN logic', snowflake: 'Same syntax in Snowflake SQL' }); risks.low.push('CASE/WHEN'); }
+  const hasWindow = dv.some(d => d.transforms.some(t => ['ROW_NUMBER','RANK','NTILE','LAG','LEAD','Window Agg'].includes(t)));
+  if (hasWindow) { direct.push({ construct: 'Window Functions', snowflake: 'Same syntax in Snowflake SQL' }); risks.low.push('Window functions'); }
+  const hasUnion = dv.some(d => d.transforms.includes('UNION'));
+  if (hasUnion) { direct.push({ construct: 'UNION / UNION ALL', snowflake: 'Same syntax in Snowflake SQL' }); risks.low.push('UNION'); }
+  if (sec.grants.length > 0) { direct.push({ construct: 'GRANT READ', snowflake: 'GRANT SELECT' }); risks.low.push('GRANT statements'); }
+
+  // Needs rework
+  const crossSrcViews = dv.filter(d => d.crossSource);
+  if (crossSrcViews.length > 0) {
+    rework.push({ construct: `Cross-source joins (${crossSrcViews.length} views)`, challenge: 'No live federation in Snowflake', approach: 'Ingest data first, then join natively' });
+    risks.high.push('Cross-source federation');
+  }
+  if (cacheBreak.PARTIAL > 0) {
+    rework.push({ construct: `CACHE PARTIAL (${cacheBreak.PARTIAL} views)`, challenge: 'No partial cache equivalent', approach: 'DYNAMIC TABLE with TARGET_LAG or TASK-based refresh' });
+    risks.medium.push('Partial cache');
+  }
+  const nonJdbc = ds.filter(d => d.type !== 'JDBC');
+  nonJdbc.forEach(d => {
+    rework.push({ construct: `${d.type} source: ${d.name} (${d.system})`, challenge: `No native ${d.system} connector`, approach: 'Snowpark, External Function, or ingestion tool' });
+    risks.high.push(`${d.system} data source`);
+  });
+  if (sec.rowLevel.length > 0) {
+    rework.push({ construct: `Row-level security (${sec.rowLevel.length} views)`, challenge: 'GETUSERNAME() not available', approach: 'Row Access Policy + CURRENT_ROLE()' });
+    risks.medium.push('Row-level security');
+  }
+  if (sec.columnMasking.length > 0) {
+    rework.push({ construct: `Column masking (${sec.columnMasking.length} columns)`, challenge: 'COLUMNPRIVILEGES not available', approach: 'Column-level Masking Policy' });
+    risks.medium.push('Column masking');
+  }
+  if (jobs.length > 0) {
+    rework.push({ construct: `Scheduled jobs (${jobs.length})`, challenge: 'No JOB equivalent', approach: 'Snowflake TASK with CRON schedule' });
+    risks.medium.push('Scheduled jobs');
+  }
+  const hasFlatten = dv.some(d => d.transforms.includes('FLATTEN'));
+  if (hasFlatten) {
+    rework.push({ construct: 'FLATTEN (Denodo array)', challenge: 'Different syntax', approach: 'LATERAL FLATTEN in Snowflake' });
+    risks.medium.push('FLATTEN syntax');
+  }
+  const hasParams = dv.some(d => d.params);
+  if (hasParams) {
+    rework.push({ construct: 'Parameterized views', challenge: 'Snowflake views cannot take parameters', approach: 'UDF, Stored Procedure, or WHERE filter' });
+    risks.high.push('Parameterized views');
+  }
+
+  return { direct, rework, risks };
+}
+
+// ============================================
+// DASHBOARD RENDERER
+// ============================================
+function renderDashboard(a) {
+  const dashEmpty = document.getElementById('dashEmpty');
+  const dashContent = document.getElementById('dashContent');
+  dashEmpty.style.display = 'none';
+  dashContent.style.display = 'block';
+
+  const totalRiskHigh = a.migration.risks.high.length;
+  const totalRiskMed = a.migration.risks.medium.length;
+  const totalRiskLow = a.migration.risks.low.length;
+
+  dashContent.innerHTML = `
+    <!-- Header -->
+    <div class="dash-header">
+      <div class="dash-header-left">
+        <h2>VQL Analysis Dashboard</h2>
+        <p>Overview of <strong>${esc(a.filename)}</strong> &middot; ${a.lineCount} lines</p>
+      </div>
+      <button class="btn btn-refresh" onclick="renderDashboard(currentAnalysis)">Refresh</button>
+    </div>
+
+    <!-- Metrics Row -->
+    <div class="metrics-row">
+      <div class="metric-card">
+        <div class="mc-label">Data Sources</div>
+        <div class="mc-value teal">${a.dataSources.length}</div>
+        <div class="mc-sub">${[...new Set(a.dataSources.map(d=>d.system))].join(', ')}</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-label">Base Views</div>
+        <div class="mc-value teal">${a.baseViews.length}</div>
+        <div class="mc-sub">Cache: ${a.cacheBreakdown.FULL}F / ${a.cacheBreakdown.PARTIAL}P / ${a.cacheBreakdown.OFF}O</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-label">Derived Views</div>
+        <div class="mc-value teal">${a.derivedViews.length}</div>
+        <div class="mc-sub">Max depth: ${a.maxDepth} &middot; Cross-src: ${a.crossSourceCount}</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-label">Complexity</div>
+        <div class="mc-value ${a.complexity.rating <= 2 ? 'green' : a.complexity.rating <= 3 ? 'warn' : 'red'}">${a.complexity.rating}/5</div>
+        <div class="mc-sub">${a.complexity.label}</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-label">Migration Risk</div>
+        <div class="mc-value ${totalRiskHigh > 0 ? 'red' : totalRiskMed > 0 ? 'warn' : 'green'}">${totalRiskHigh > 0 ? 'HIGH' : totalRiskMed > 0 ? 'MED' : 'LOW'}</div>
+        <div class="mc-sub">${totalRiskHigh}H / ${totalRiskMed}M / ${totalRiskLow}L</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-label">Objects Total</div>
+        <div class="mc-value teal">${a.dataSources.length + a.wrappers.length + a.baseViews.length + a.derivedViews.length + a.procedures.length}</div>
+        <div class="mc-sub">${a.wrappers.length} wrappers &middot; ${a.procedures.length} procs &middot; ${a.jobs.length} jobs</div>
+      </div>
+    </div>
+
+    <!-- Complexity Meter -->
+    <div class="section-card">
+      <h3><span class="sec-icon" style="background:rgba(61,214,208,0.12);color:#3dd6d0;">C</span> Complexity Rating</h3>
+      <div class="complexity-meter">
+        <div class="complexity-bar">
+          ${[1,2,3,4,5].map(i => `<div class="cb-dot ${i <= a.complexity.rating ? 'filled-'+i : ''}"></div>`).join('')}
+        </div>
+        <strong>${a.complexity.rating}/5</strong> &mdash; ${a.complexity.label}
+      </div>
+    </div>
+
+    <!-- Two column layout -->
+    <div class="two-col">
+
+      <!-- Source Systems -->
+      <div class="section-card">
+        <h3><span class="sec-icon" style="background:rgba(231,76,60,0.12);color:#e74c3c;">S</span> Source Systems</h3>
+        <table class="data-table">
+          <thead><tr><th>Name</th><th>Type</th><th>System</th><th>Auth</th></tr></thead>
+          <tbody>
+            ${a.dataSources.map(d => `<tr>
+              <td><strong>${esc(d.name)}</strong></td>
+              <td><span class="pill pill-blue">${d.type}</span></td>
+              <td>${esc(d.system)}</td>
+              <td><span class="pill pill-gray">${d.auth}</span></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Base Views -->
+      <div class="section-card">
+        <h3><span class="sec-icon" style="background:rgba(61,214,208,0.12);color:#3dd6d0;">B</span> Base Views</h3>
+        <table class="data-table">
+          <thead><tr><th>Name</th><th>Wrapper</th><th>Cache</th><th>TTL</th><th>Cols</th></tr></thead>
+          <tbody>
+            ${a.baseViews.map(b => `<tr>
+              <td><strong>${esc(b.name)}</strong></td>
+              <td style="font-size:12px;">${esc(b.wrapper)}</td>
+              <td><span class="pill ${b.cache === 'FULL' ? 'pill-green' : b.cache === 'PARTIAL' ? 'pill-warn' : 'pill-gray'}">${b.cache}</span></td>
+              <td>${b.ttl}</td>
+              <td>${b.columns.length}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Derived Views (full width) -->
+    <div class="section-card">
+      <h3><span class="sec-icon" style="background:rgba(39,174,96,0.12);color:#27ae60;">D</span> Derived Views</h3>
+      <table class="data-table">
+        <thead><tr><th>Name</th><th>Source Views</th><th>Joins</th><th>Transformations</th><th>Cross-Src</th><th>Depth</th></tr></thead>
+        <tbody>
+          ${a.derivedViews.map(d => `<tr>
+            <td><strong>${esc(d.name)}</strong>${d.params ? ' <span class="pill pill-warn">PARAM</span>' : ''}</td>
+            <td style="font-size:12px;">${d.sourceViews.map(s => esc(s)).join(', ')}</td>
+            <td>${d.joinTypes.map(j => `<span class="pill pill-teal">${j}</span>`).join(' ') || '-'}</td>
+            <td style="font-size:11px;">${d.transforms.map(t => `<span class="pill pill-blue">${t}</span>`).join(' ') || '-'}</td>
+            <td>${d.crossSource ? '<span class="pill pill-red">YES</span>' : '<span class="pill pill-green">NO</span>'}</td>
+            <td>${d.depth}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="two-col">
+      <!-- Security -->
+      <div class="section-card">
+        <h3><span class="sec-icon" style="background:rgba(231,76,60,0.12);color:#e74c3c;">&#x1f512;</span> Security Configuration</h3>
+        ${a.security.rowLevel.length > 0 ? `
+          <h4 style="font-size:13px;color:#666;margin-bottom:8px;">Row-Level Security</h4>
+          <table class="data-table">
+            <thead><tr><th>View</th><th>Mechanism</th></tr></thead>
+            <tbody>${a.security.rowLevel.map(r => `<tr><td>${esc(r.view)}</td><td>${esc(r.mechanism)}</td></tr>`).join('')}</tbody>
+          </table>
+        ` : '<p style="color:#999;font-size:13px;">No row-level security</p>'}
+        ${a.security.columnMasking.length > 0 ? `
+          <h4 style="font-size:13px;color:#666;margin:16px 0 8px;">Column Masking</h4>
+          <table class="data-table">
+            <thead><tr><th>View</th><th>Column</th><th>Default</th><th>Roles</th></tr></thead>
+            <tbody>${a.security.columnMasking.map(c => `<tr>
+              <td>${esc(c.view)}</td>
+              <td><strong>${esc(c.column)}</strong></td>
+              <td><span class="pill ${c.default === 'HIDDEN' ? 'pill-red' : 'pill-green'}">${c.default}</span></td>
+              <td style="font-size:11px;">${c.roles.map(r => `${r.role}: <span class="pill ${r.access === 'VISIBLE' ? 'pill-green' : 'pill-red'}">${r.access}</span>`).join(', ')}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        ` : ''}
+        ${a.security.grants.length > 0 ? `
+          <h4 style="font-size:13px;color:#666;margin:16px 0 8px;">Grants</h4>
+          <table class="data-table">
+            <thead><tr><th>Permission</th><th>Object</th><th>Role</th></tr></thead>
+            <tbody>${a.security.grants.map(g => `<tr>
+              <td><span class="pill pill-teal">${g.permission}</span></td>
+              <td>${esc(g.object)}</td>
+              <td>${esc(g.role)}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        ` : ''}
+      </div>
+
+      <!-- Cache & Scheduling -->
+      <div class="section-card">
+        <h3><span class="sec-icon" style="background:rgba(243,156,18,0.12);color:#f39c12;">&#9200;</span> Cache & Scheduling</h3>
+        <h4 style="font-size:13px;color:#666;margin-bottom:8px;">Cache Breakdown</h4>
+        <div style="display:flex;gap:16px;margin-bottom:16px;">
+          <div style="text-align:center;"><div style="font-size:24px;font-weight:700;color:#27ae60;">${a.cacheBreakdown.FULL}</div><div style="font-size:11px;color:#888;">FULL</div></div>
+          <div style="text-align:center;"><div style="font-size:24px;font-weight:700;color:#f39c12;">${a.cacheBreakdown.PARTIAL}</div><div style="font-size:11px;color:#888;">PARTIAL</div></div>
+          <div style="text-align:center;"><div style="font-size:24px;font-weight:700;color:#999;">${a.cacheBreakdown.OFF}</div><div style="font-size:11px;color:#888;">OFF</div></div>
+        </div>
+        ${a.jobs.length > 0 ? `
+          <h4 style="font-size:13px;color:#666;margin-bottom:8px;">Scheduled Jobs</h4>
+          <table class="data-table">
+            <thead><tr><th>Job</th><th>CRON</th><th>Targets</th></tr></thead>
+            <tbody>${a.jobs.map(j => `<tr>
+              <td><strong>${esc(j.name)}</strong></td>
+              <td><code>${esc(j.cron)}</code></td>
+              <td style="font-size:11px;">${j.refreshTargets.join(', ')}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        ` : '<p style="color:#999;font-size:13px;margin-top:8px;">No scheduled jobs</p>'}
+      </div>
+    </div>
+
+    <!-- Stored Procedures -->
+    ${a.procedures.length > 0 ? `
+    <div class="section-card">
+      <h3><span class="sec-icon" style="background:rgba(241,196,15,0.12);color:#f1c40f;">P</span> Stored Procedures</h3>
+      <table class="data-table">
+        <thead><tr><th>Name</th><th>Parameters</th><th>Logic</th><th>References</th></tr></thead>
+        <tbody>
+          ${a.procedures.map(p => `<tr>
+            <td><strong>${esc(p.name)}</strong></td>
+            <td style="font-size:12px;">${esc(p.params)}</td>
+            <td>${esc(p.bodySummary)}</td>
+            <td style="font-size:12px;">${p.referencedViews.join(', ') || '-'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
+
+    <!-- Lineage Graph -->
+    <div class="section-card">
+      <h3><span class="sec-icon" style="background:rgba(155,89,182,0.12);color:#9b59b6;">L</span> Lineage Graph</h3>
+      <div class="lineage-tree">${a.lineageTree}</div>
+    </div>
+
+    <!-- Dependency Table -->
+    <div class="section-card">
+      <h3><span class="sec-icon" style="background:rgba(52,152,219,0.12);color:#3498db;">&#8644;</span> Dependency Table</h3>
+      <table class="data-table">
+        <thead><tr><th>View</th><th>Depends On</th><th>Depth</th></tr></thead>
+        <tbody>
+          ${a.dependencyTable.map(d => `<tr>
+            <td><strong>${esc(d.name)}</strong></td>
+            <td style="font-size:12px;">${esc(d.dependsOn) || '-'}</td>
+            <td>${d.depth}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Column Metadata -->
+    ${a.metadata.length > 0 ? `
+    <div class="section-card">
+      <h3><span class="sec-icon" style="background:rgba(52,152,219,0.12);color:#3498db;">M</span> Column Metadata</h3>
+      ${a.metadata.map(md => `
+        <h4 style="font-size:13px;color:#666;margin:12px 0 6px;">${esc(md.view)}</h4>
+        <table class="data-table">
+          <thead><tr><th>Column</th><th>Description</th></tr></thead>
+          <tbody>${md.columns.map(c => `<tr><td><strong>${esc(c.column)}</strong></td><td>${esc(c.description)}</td></tr>`).join('')}</tbody>
+        </table>
+      `).join('')}
+    </div>
+    ` : ''}
+
+    <!-- Migration Readiness -->
+    <div class="section-card">
+      <h3><span class="sec-icon" style="background:rgba(39,174,96,0.12);color:#27ae60;">&#x2744;</span> Snowflake Migration Readiness</h3>
+
+      <h4 style="font-size:14px;color:#27ae60;margin-bottom:10px;">Direct Mappings (${a.migration.direct.length})</h4>
+      <table class="data-table">
+        <thead><tr><th>Denodo Construct</th><th>Snowflake Equivalent</th></tr></thead>
+        <tbody>
+          ${a.migration.direct.map(d => `<tr><td>${esc(d.construct)}</td><td>${esc(d.snowflake)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+
+      ${a.migration.rework.length > 0 ? `
+      <h4 style="font-size:14px;color:#e74c3c;margin:24px 0 10px;">Needs Rework (${a.migration.rework.length})</h4>
+      <table class="data-table">
+        <thead><tr><th>Construct</th><th>Challenge</th><th>Snowflake Approach</th></tr></thead>
+        <tbody>
+          ${a.migration.rework.map(r => `<tr><td>${esc(r.construct)}</td><td>${esc(r.challenge)}</td><td>${esc(r.approach)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+      ` : ''}
+
+      <h4 style="font-size:14px;color:#333;margin:24px 0 10px;">Risk Summary</h4>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <div>
+          <span class="risk-high">HIGH RISK (${a.migration.risks.high.length})</span>
+          <ul style="font-size:12px;color:#666;margin:6px 0 0 18px;">${a.migration.risks.high.map(r => `<li>${esc(r)}</li>`).join('') || '<li>None</li>'}</ul>
+        </div>
+        <div>
+          <span class="risk-medium">MEDIUM RISK (${a.migration.risks.medium.length})</span>
+          <ul style="font-size:12px;color:#666;margin:6px 0 0 18px;">${a.migration.risks.medium.map(r => `<li>${esc(r)}</li>`).join('') || '<li>None</li>'}</ul>
+        </div>
+        <div>
+          <span class="risk-low">LOW RISK (${a.migration.risks.low.length})</span>
+          <ul style="font-size:12px;color:#666;margin:6px 0 0 18px;">${a.migration.risks.low.map(r => `<li>${esc(r)}</li>`).join('') || '<li>None</li>'}</ul>
+        </div>
+      </div>
+
+      <h4 style="font-size:14px;color:#333;margin:24px 0 10px;">Recommended Migration Order</h4>
+      <ol style="font-size:13px;color:#555;margin-left:20px;line-height:1.8;">
+        ${a.dependencyTable.sort((x,y) => x.depth - y.depth).map(d => `<li><strong>${esc(d.name)}</strong> <span class="pill pill-gray">depth ${d.depth}</span></li>`).join('')}
+      </ol>
+    </div>
+  `;
+}
+</script>
+</body>
+</html>
